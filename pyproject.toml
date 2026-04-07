@@ -1,22 +1,32 @@
 [project]
 name = "PyCG"
-version = "0.0.8"
+version = "0.0.9"
 
-description = "PyCG - Practical Python Call Graphs"
+description = "PyCG - Practical Python Call Graphs (fixed for Python 3.11+)"
 readme = "README.md"
-requires-python = ">=3.4"
+requires-python = ">=3.8"
 
 licence = {file = "LICENCE"}
 authors = [{name = "Vitalis Salis", email = "vitsalis@gmail.com"}]
 
+# FIX: added packaging as required dependency (replaces pkg_resources)
+dependencies = ["packaging"]
 
 classifiers = [
     "License :: OSI Approved :: Apache Software License",
     "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
 ]
 
 [project.optional-dependencies]
 dev = ["flake8>=6.0.0", "isort>=5.12.0", "black>=22.12.0", "mock"]
+
+[project.scripts]
+pycg = "pycg.__main__:main"
 
 [project.urls]
 "Homepage" = "https://github.com/vitsalis/PyCG"
@@ -26,14 +36,18 @@ dev = ["flake8>=6.0.0", "isort>=5.12.0", "black>=22.12.0", "mock"]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
+[tool.hatch.build.targets.wheel]
+# FIX: tell hatchling to use lowercase "pycg" as the package directory
+packages = ["pycg"]
+
 [tool.black]
 line-length = 88
-target_version = ['py38', 'py39', 'py310']
+target_version = ['py38', 'py39', 'py310', 'py311']
 preview = true
 exclude = '''
 /(
-    \.eggs         # exclude a few common directories in the
-  | \.git          # root of the project
+    \.eggs
+  | \.git
   | \.mypy_cache
   | \.vscode
   | build
@@ -44,18 +58,14 @@ exclude = '''
 '''
 
 [tool.ruff]
-# Do not enforce `E501` (line length violations) for now.
 ignore = ["E501"]
-
 exclude = [
     "micro-benchmark",
     "micro-benchmark-key-errs"
 ]
 
-# Ignore `E402` (import violations) in all `__init__.py` files
 [tool.ruff.per-file-ignores]
 "__init__.py" = ["E402", "F401"]
-
 
 [tool.isort]
 profile = "black"

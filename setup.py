@@ -19,30 +19,28 @@
 # under the License.
 #
 import os
-
 from setuptools import setup, find_packages
-from subprocess import call
 
 
 def get_long_desc():
     with open("README.md", "r") as readme:
         desc = readme.read()
-
     return desc
 
 
 def setup_package():
     setup(
         name="pycg",
-        version="0.0.8",
+        version="0.0.9",
         description="Practical Python Call Graphs",
         long_description=get_long_desc(),
         long_description_content_type="text/markdown",
         url="https://github.com/vitsalis/pycg",
         license="Apache Software License",
         packages=find_packages(),
-        install_requires=[],
-        python_requires=">=3.4",
+        # FIX: packaging replaces pkg_resources from setuptools
+        install_requires=["packaging"],
+        python_requires=">=3.8",
         entry_points={
             "console_scripts": [
                 "pycg=pycg.__main__:main",
@@ -51,6 +49,11 @@ def setup_package():
         classifiers=[
             "License :: OSI Approved :: Apache Software License",
             "Programming Language :: Python :: 3",
+            "Programming Language :: Python :: 3.8",
+            "Programming Language :: Python :: 3.9",
+            "Programming Language :: Python :: 3.10",
+            "Programming Language :: Python :: 3.11",
+            "Programming Language :: Python :: 3.12",
         ],
         author="Vitalis Salis",
         author_email="vitsalis@gmail.com",

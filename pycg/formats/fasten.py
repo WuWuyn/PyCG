@@ -20,10 +20,10 @@
 #
 import os
 
-from pkg_resources import Requirement
+# FIX: pkg_resources is removed in newer setuptools; use packaging instead
+from packaging.requirements import Requirement
 
 from pycg import utils
-
 from .base import BaseFormatter
 
 
@@ -56,8 +56,7 @@ class Fasten(BaseFormatter):
             else:
                 if not name.startswith(modname + "."):
                     raise Exception("name should start with modname", name, modname)
-
-                cleared = name[(len(modname) + 1) :]
+                cleared = name[(len(modname) + 1):]
 
         suffix = ""
         if name in self.functions:
@@ -67,10 +66,9 @@ class Fasten(BaseFormatter):
 
     def to_external_uri(self, modname, name=""):
         if modname == utils.constants.BUILTIN_NAME:
-            name = name[len(modname) + 1 :]
+            name = name[len(modname) + 1:]
             modname = ".builtin"
-
-        return "//{}//{}".format(modname.replace("-", "_"), name)
+        return "//{}//{}/".format(modname.replace("-", "_"), name)
 
     def find_dependencies(self, package_path):
         res = []
@@ -87,16 +85,14 @@ class Fasten(BaseFormatter):
         for line in lines:
             if not line:
                 continue
-
             try:
-                req = Requirement.parse(line)
-            except ValueError:
-                # The specific line in the requirements.txt
-                # does not follow the Requirements File Format
+                # FIX: packaging.requirements.Requirement replaces pkg_resources.Requirement
+                req = Requirement(line)
+            except Exception:
                 continue
 
-            specs = req.specs
-
+            # FIX: packaging uses req.specifier instead of req.specs
+            specs = [(str(s.operator), str(s.version)) for s in req.specifier]
             constraints = []
 
             def add_range(begin, end):
@@ -123,7 +119,6 @@ class Fasten(BaseFormatter):
             begin = None
             end = None
             for key, val in sorted(specs, key=lambda x: x[1]):
-                # if begin, then it is already in a range
                 if key == "==":
                     if begin and end:
                         add_range(begin, end)
@@ -131,7 +126,6 @@ class Fasten(BaseFormatter):
                         end = None
                     if not begin:
                         constraints.append("[{}]".format(val))
-
                 if key == ">":
                     if end:
                         add_range(begin, end)
@@ -146,7 +140,6 @@ class Fasten(BaseFormatter):
                         end = None
                     if not begin:
                         begin = (val, True)
-
                 if key == "<":
                     end = (val, False)
                 if key == "<=":
@@ -161,17 +154,13 @@ class Fasten(BaseFormatter):
 
     def get_internal_modules(self):
         mods = {}
-
         for modname, module in self.internal_mods.items():
             name = self.to_uri(modname)
             filename = module["filename"]
             namespaces = module["methods"]
-
             mods[name] = {"sourceFile": filename, "namespaces": {}}
-
             for namespace, info in namespaces.items():
                 namespace_uri = self.to_uri(modname, info["name"])
-
                 unique = self.get_unique_and_increment()
                 mods[name]["namespaces"][unique] = dict(
                     namespace=namespace_uri,
@@ -179,29 +168,21 @@ class Fasten(BaseFormatter):
                 )
                 self.namespace_map[namespace_uri] = unique
         mods = self.add_superclasses(mods)
-
         return mods
 
     def add_superclasses(self, mods):
         for cls_name, cls in self.classes.items():
             cls_uri = self.namespace_map.get(self.to_uri(cls["module"], cls_name))
-            mods[self.to_uri(cls["module"])]["namespaces"][cls_uri]["metadata"][
-                "superClasses"
-            ] = []
+            mods[self.to_uri(cls["module"])]["namespaces"][cls_uri]["metadata"]["superClasses"] = []
             for parent in cls["mro"]:
                 if parent == cls_name:
                     continue
-
                 if self.classes.get(parent):
                     parent_uri = self.to_uri(self.classes[parent]["module"], parent)
                 else:
                     parent_mod = parent.split(".")[0]
                     parent_uri = self.to_external_uri(parent_mod, parent)
-
-                mods[self.to_uri(cls["module"])]["namespaces"][cls_uri]["metadata"][
-                    "superClasses"
-                ].append(parent_uri)
-
+                mods[self.to_uri(cls["module"])]["namespaces"][cls_uri]["metadata"]["superClasses"].append(parent_uri)
         return mods
 
     def create_namespaces_map(self):
@@ -210,7 +191,6 @@ class Fasten(BaseFormatter):
             for mod in hmap:
                 for namespace in hmap[mod]["methods"]:
                     res[namespace] = mod
-
         return namespaces_maps
 
     def get_external_modules(self):
@@ -218,14 +198,10 @@ class Fasten(BaseFormatter):
         for modname, module in self.external_mods.items():
             name = self.to_external_uri(modname).split("/")[2]
             namespaces = module["methods"]
-
             mods[name] = {"sourceFile": "", "namespaces": {}}
-
             for namespace, info in namespaces.items():
-                # We avoid saving the external module as external method
                 if info["name"] != modname:
                     namespace_uri = self.to_external_uri(modname, info["name"])
-
                     unique = self.get_unique_and_increment()
                     mods[name]["namespaces"][str(unique)] = dict(
                         namespace=namespace_uri, metadata={}
@@ -235,9 +211,7 @@ class Fasten(BaseFormatter):
 
     def get_graph(self):
         graph = {"internalCalls": [], "externalCalls": [], "resolvedCalls": []}
-
         internal, external = self.create_namespaces_map()
-
         for src, dst in self.edges:
             uris = []
             for node in [src, dst]:
@@ -248,7 +222,6 @@ class Fasten(BaseFormatter):
                 elif node in external:
                     mod = external[node]
                     uris.append(self.namespace_map.get(self.to_external_uri(mod, node)))
-
             if len(uris) == 2:
                 if dst in external:
                     graph["externalCalls"].append([str(uris[0]), str(uris[1]), {}])

@@ -3,12 +3,16 @@
 [![Linters](https://github.com/vitsalis/PyCG/actions/workflows/linters.yml/badge.svg)](https://github.com/vitsalis/PyCG/actions/workflows/linters.yml)
 [![Tests](https://github.com/vitsalis/PyCG/actions/workflows/test.yaml/badge.svg)](https://github.com/vitsalis/PyCG/actions/workflows/test.yaml)
 
+> **This is a community-maintained fork** of [vitsalis/PyCG](https://github.com/vitsalis/PyCG),
+> fixing compatibility issues with **Python 3.11 and Windows**.
+
 PyCG generates call graphs for Python code using static analysis.
-It efficiently supports
-* Higher order functions
-* Twisted class inheritance schemes
-* Automatic discovery of imported modules for further analysis
-* Nested definitions
+It efficiently supports:
+
+- Higher order functions
+- Twisted class inheritance schemes
+- Automatic discovery of imported modules for further analysis
+- Nested definitions
 
 You can read the full methodology as well as a complete evaluation on the
 [ICSE 2021 paper](https://arxiv.org/pdf/2103.00587.pdf).
@@ -16,132 +20,121 @@ You can read the full methodology as well as a complete evaluation on the
 You can cite PyCG as follows.
 Vitalis Salis, Thodoris Sotiropoulos, Panos Louridas, Diomidis Spinellis and Dimitris Mitropoulos.
 PyCG: Practical Call Graph Generation in Python.
-In _43rd International Conference on Software Engineering, ICSE '21_,
+In *43rd International Conference on Software Engineering, ICSE '21*,
 25–28 May 2021.
 
-> **PyCG** is archived. Due to limited availability, no further development
-> improvements are planned. Happy to help anyone that wants to create a fork to
-> continue development.
+---
 
-# Installation
+## Fixes in this fork
 
-PyCG is implemented in Python3 and requires Python version 3.4 or higher.
-It also has no dependencies. Simply:
-```
-pip install pycg
-```
+| # | Bug | Affected file | Fix |
+|---|-----|---------------|-----|
+| 1 | `ModuleNotFoundError: No module named 'pkg_resources'` | `pycg/formats/fasten.py` | Replaced `pkg_resources.Requirement` with `packaging.requirements.Requirement` |
+| 2 | `ImportManagerError: Can't add edge to a non existing node` | `pycg/machinery/imports.py` | Node is now created **before** the edge in `CustomLoader.__init__` |
+| 3 | Same error triggered by `importlib.invalidate_caches()` on Python 3.11+ | `pycg/machinery/imports.py` | Original path hooks are restored before cache invalidation to prevent `CustomLoader` from intercepting system modules |
+| 4 | `No module named pycg` on Windows (case-sensitive install) | `pyproject.toml` | Added `[tool.hatch.build.targets.wheel] packages = ["pycg"]` to force lowercase package directory |
 
-# Usage
+---
 
-```
-~ >>> pycg -h
-usage: __main__.py [-h] [--package PACKAGE] [--fasten] [--product PRODUCT]
-                        [--forge FORGE] [--version VERSION] [--timestamp TIMESTAMP]
-                        [--max-iter MAX_ITER] [--operation {call-graph,key-error}]
-                        [--as-graph-output AS_GRAPH_OUTPUT] [-o OUTPUT]
-                        [entry_point ...]
+## Installation
 
-positional arguments:
-  entry_point           Entry points to be processed
+**From this fork (recommended):**
 
-optional arguments:
-  -h, --help            show this help message and exit
-  --package PACKAGE     Package containing the code to be analyzed
-  --fasten              Produce call graph using the FASTEN format
-  --product PRODUCT     Package name
-  --forge FORGE         Source the product was downloaded from
-  --version VERSION     Version of the product
-  --timestamp TIMESTAMP
-                        Timestamp of the package's version
-  --max-iter MAX_ITER   Maximum number of iterations through source code. If not specified a fix-point iteration will be performed.
-  --operation {call-graph,key-error}
-                        Operation to perform. Choose call-graph for call graph generation (default) or key-error for key error detection on dictionaries.
-  --as-graph-output AS_GRAPH_OUTPUT
-                        Output for the assignment graph
-  -o OUTPUT, --output OUTPUT
-                        Output path
+```bash
+pip install git+https://github.com/WuWuyn/PyCG.git
 ```
 
-The following command line arguments should used only when `--fasten` is
-provied:
+**From source:**
 
-- `--product`: The name of the package.
-- `--forge`: Source the package was downloaded from.
-- `--version`: The version of the package.
-- `--timestamp` : The timestamp of the package's version.
-
-# Call Graph Output
-
-## Simple JSON format
-
-The call edges are in the form of an adjacency list where an edge `(src, dst)`
-is represented as an entry of `dst` in the list assigned to key `src`:
-
+```bash
+git clone https://github.com/WuWuyn/PyCG.git
+cd PyCG
+pip install -e .
 ```
+
+> `packaging` is automatically installed as a dependency.
+
+---
+
+## Usage
+
+### Linux / macOS
+
+```bash
+# Analyze a package — all .py files discovered automatically
+pycg --package mypackage $(find mypackage -type f -name "*.py") -o callgraph.json
+```
+
+### Windows (PowerShell)
+
+```powershell
+# Run from inside your project directory
+cd path\to\your\project
+
+python -m pycg --package . (Get-ChildItem -Recurse -Filter "*.py" | ForEach-Object { $_.Name }) -o callgraph.json
+```
+
+---
+
+## Output Format
+
+### Simple JSON (default)
+
+Each key is a node (module or function). Its value is the list of nodes it calls.
+
+```json
 {
-    "node1": ["node2", "node3"],
-    "node2": ["node3"],
-    "node3": []
+    "main": ["main.run"],
+    "main.run": ["main.greet"],
+    "main.greet": ["utils.helper"],
+    "utils.helper": ["<builtin>.print"],
+    "<builtin>.print": []
 }
 ```
 
-## FASTEN Format
+### FASTEN format
 
-For an up-to-date description of the FASTEN format refer to the
-[FASTEN
-wiki](https://github.com/fasten-project/fasten/wiki/Extended-Revision-Call-Graph-format#python).
-
-# Key Errors Output
-
-We are currently experimenting on identifying potential invalid dictionary
-accesses on Python dictionaries (key errors).
-The output format for key errors is a list of dictionaries containing:
-- The file name in which the key error was identified
-- The line number inside the file
-- The namespace of the accessed dictionary
-- The key used to access the dictionary
-
-```
-[{
-    "filename": "mod.py",
-    "lineno": 2,
-    "namespace": "mod.<dict1>",
-    "key": "key2"
-},
-{
-    "filename": "mod.py",
-    "lineno": 8,
-    "namespace": "mod.<dict1>",
-    "key": "nokey"
-}]
+```bash
+pycg --package mypackage --fasten \
+     --product "mypackage" --forge "PyPI" \
+     --version "1.0" --timestamp 1234567890 \
+     mypackage/module.py -o callgraph.json
 ```
 
-# Examples
+---
 
-All the entry points are known and we want the simple JSON format
-```
-~ >>> pycg --package pkg_root pkg_root/module1.py pkg_root/subpackage/module2.py -o cg.json
-```
+## CLI Reference
 
-All entry points are not known and we want the simple JSON format
 ```
-~ >>> pycg --package django $(find django -type f -name "*.py") -o django.json
-```
-
-We want the FASTEN format:
-```
-~ >>> pycg --package pypi_pkg --fasten --product "pypipkg" --forge "PyPI" \
-        --version "0.1" --timestamp 42 \
-        pypi_pkg/module1.py pkg_root/subpackage/module2.py -o cg.json
+usage: pycg [-h] [--package PACKAGE] [--fasten] [--product PRODUCT]
+            [--forge FORGE] [--version VERSION] [--timestamp TIMESTAMP]
+            [--max-iter MAX_ITER] [--operation {call-graph,key-error}]
+            [--as-graph-output AS_GRAPH_OUTPUT] [-o OUTPUT]
+            [entry_point ...]
 ```
 
-# Running Tests
+| Argument | Description |
+|----------|-------------|
+| `entry_point` | One or more `.py` files to analyze |
+| `--package` | Root directory of the package being analyzed |
+| `--fasten` | Output in FASTEN format instead of simple JSON |
+| `--max-iter` | Max analysis iterations (default: until fixpoint) |
+| `--operation` | `call-graph` (default) or `key-error` |
+| `-o OUTPUT` | Output file path |
 
-From the root directory, first install the [mock](https://pypi.org/project/mock/) package:
-```
-pip3 install mock
-```
-Τhen, simply run the tests by executing:
-```
+---
+
+## Running Tests
+
+```bash
+pip install mock
 make test
 ```
+
+---
+
+## Original Paper
+
+Vitalis Salis, Thodoris Sotiropoulos, Panos Louridas, Diomidis Spinellis and Dimitris Mitropoulos.
+PyCG: Practical Call Graph Generation in Python.
+In *43rd International Conference on Software Engineering, ICSE '21*, 25–28 May 2021.

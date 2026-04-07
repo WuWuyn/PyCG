@@ -38,10 +38,15 @@ def get_custom_loader(ig_obj):
             self.fullname = fullname
             self.path = path
 
-            ig_obj.create_edge(self.fullname)
+            # FIX: create node first before creating edge (original code did it backwards)
             if not ig_obj.get_node(self.fullname):
                 ig_obj.create_node(self.fullname)
                 ig_obj.set_filepath(self.fullname, self.path)
+            # FIX: wrap in try/except to ignore modules outside the analyzed scope
+            try:
+                ig_obj.create_edge(self.fullname)
+            except ImportManagerError:
+                pass
 
         def get_filename(self, fullname):
             return self.path
@@ -92,8 +97,19 @@ class ImportManager(object):
         node["imports"].add(dest)
 
     def _clear_caches(self):
+        # FIX: temporarily restore original hooks before invalidating caches.
+        # Without this, invalidate_caches() triggers CustomLoader for system
+        # modules like importlib.metadata, causing a crash because those
+        # modules are not in the import graph.
+        current_hooks = sys.path_hooks[:]
+        current_path = sys.path[:]
+        if self.old_path_hooks is not None:
+            sys.path_hooks[:] = self.old_path_hooks
+            sys.path[:] = self.old_path
         importlib.invalidate_caches()
         sys.path_importer_cache.clear()
+        sys.path_hooks[:] = current_hooks
+        sys.path[:] = current_path
         # TODO: maybe not do that since it empties the whole cache
         for name in self.import_graph:
             if name in sys.modules:
